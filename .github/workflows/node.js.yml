@@ -1,0 +1,49 @@
+name: Backend Project CI
+
+on:
+  push:
+    branches: ["dev"]
+  pull_request:
+    branches: ["dev"]
+  pull_request_target:
+    types: [opened, synchronize]
+    
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.16.0]
+
+    services:
+      postgres:
+        image: postgres:14.8
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+      - run: npm ci
+      - name: Setup test database
+        run: |
+          psql -h localhost -U postgres -c 'CREATE DATABASE test_db;'
+        env:
+          PGPASSWORD: postgres
+      - name: Run tests
+        run: npm test
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          JWT_SECRET: jwt_secret
